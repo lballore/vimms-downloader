@@ -2,7 +2,8 @@ import os
 import random
 import sys
 from typing import List
-from src import models
+
+import models
 
 
 USER_AGENTS: list[str] = [
@@ -42,6 +43,18 @@ CONSOLES = {
     'Playstation Portable': 'PSP'
 }
 
+COUNTRIES = {
+    1: 'Argentina',    2: 'Asia',          3: 'Australia',      35: 'Austria',        31: 'Belgium',
+    4: 'Brazil',       5: 'Canada',        6: 'China',          38: 'Croatia',         7: 'Denmark',
+    8: 'Europe',       9: 'Finland',       10: 'France',        11: 'Germany',        12: 'Greece',
+    13: 'Hong Kong',   27: 'India',        33: 'Ireland',       34: 'Israel',         14: 'Italy',
+    15: 'Japan',       16: 'Korea',        30: 'Latin America', 17: 'Mexico',         18: 'Netherlands',
+    40: 'New Zealand', 19: 'Norway',       28: 'Poland',        29: 'Portugal',       20: 'Russia',
+    32: 'Scandinavia', 37: 'South Africa', 21: 'Spain',         22: 'Sweden',         36: 'Switzerland',
+    23: 'Taiwan',      39: 'Turkey',       41: 'UAE',           24: 'United Kingdom', 25: 'USA',
+    26: 'World'
+}
+
 
 class VimmsLairHelper:
     """Helper class to hold the vimms lair helper methods"""
@@ -64,8 +77,16 @@ class VimmsLairHelper:
     VIMMS_LAIR_BASE_URL: str = 'https://vimm.net'
     VIMMS_LAIR_DL_BASE_URL: str = 'https://dl2.vimm.net'
 
-    def __init__(self, roms_directory: str = 'ROMS'):
+    def __init__(
+            self, roms_directory: str = 'ROMS',
+            search_version: str = 'new',
+            countries: list[int] = [8, 14, 26],
+            all_countries: bool = False
+        ):
         self.roms_directory = roms_directory
+        self.search_version = search_version
+        self.countries = countries
+        self.all_countries = all_countries
 
     def print_welcome(self):
         """Prints the welcome message"""
@@ -119,12 +140,12 @@ class VimmsLairHelper:
         """Returns a hydrated search_url with the correct system and query"""
         if search_selection.system != 'general':
             console_uri_name: str = self.selection_to_uri(search_selection.system)
-            url: str = f'{self.VIMMS_LAIR_BASE_URL}/vault/?p=list&system={console_uri_name}&q={search_selection.query}'
-            url.replace('\n', '')
+            url: str = f'{self.VIMMS_LAIR_BASE_URL}/vault/?p=list&action=filters&system={console_uri_name}&q={search_selection.query}'
+            url = self.add_url_filters(url)
             return url
         else:
-            url: str = (
-                f'{self.VIMMS_LAIR_BASE_URL}/vault/?p=list&q={search_selection.query}')
+            url: str = f'{self.VIMMS_LAIR_BASE_URL}/vault/?p=list&action=filters&q={search_selection.query}'
+            url = self.add_url_filters(url)
             return url
 
     def generate_path_to_bulk_roms(self, roms: List[models.BulkSystemROMS], home_dir: str) -> List[models.BulkSystemROMS]:
@@ -134,6 +155,19 @@ class VimmsLairHelper:
                 folder = '#' if 'number' in section.section else section.section[-1].upper()
                 section.path = os.path.join(home_dir, self.roms_directory, system.system_name, folder)
         return roms
+
+
+    def add_url_filters(self, url: str) -> str:
+        """Adds the filters for the search query"""
+        if self.search_version:
+            url += f'&version={self.search_version}'
+        if self.countries:
+            for country_id in self.countries:
+                if country_id in COUNTRIES.keys():
+                    url += f'&countries%5B%5D={country_id}'
+        if self.all_countries:
+            url += '&countries_all=1'
+        return url
 
 
     def __create_alpha_num_structure(self, path: str, system: str):

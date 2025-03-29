@@ -10,8 +10,8 @@ from typing import List
 import urllib3
 import zipfile
 
-from src import models, helpers
-from src.helpers import CONSOLES
+import models, helpers
+from helpers import CONSOLES
 
 urllib3.disable_warnings()
 
@@ -46,6 +46,7 @@ def get_section_of_roms(section: str) -> List[models.ROM]:
     """Gets a section of ROM home page URIs from a system category"""
     roms: List[models.ROM] = []
     section_url: str = f'{vimmslair_helper.VIMMS_LAIR_BASE_URL}/vault/{section}'
+    section_url = vimmslair_helper.add_url_filters(section_url)
     try:
         print('Getting a list of roms for the section: ' + section)
         page: Response = requests.get(section_url, verify=False)
@@ -66,7 +67,7 @@ def get_section_of_roms(section: str) -> List[models.ROM]:
                 name = rom_a.text
                 page_url = vimmslair_helper.VIMMS_LAIR_BASE_URL + rom_a.get('href')
                 download_url = get_rom_download_url(page_url)
-                rom = models.ROM(name, page_url, download_url)
+                rom = models.ROM(name, page_url, download_url)  # roms details aren't displayed, so only download_url is needed
                 roms.append(rom)
     except Exception as e:
         print(f'Failed on getting section of roms: {section}. The page may not contain any roms. Error: {str(e)}')
@@ -97,17 +98,23 @@ def get_selected_system_bulk_roms(config: models.Config) -> List[models.BulkSyst
 
 def get_all_system_roms(system: str, system_name: str) -> models.BulkSystemROMS:
     """Used in bulk mode to get the home page URI for every rom on a system"""
-    print('Getting a list of roms for the ' + system)
+    print('Getting a list of roms for the ' + system_name)
     section_roms: List[models.SectionofROMs] = []
     section_urls: List[str] = [
-        f'?p=list&system={system}&section=number', f'{system}/a',
-        f'{system}/b', f'{system}/c', f'{system}/d', f'{system}/e',
-        f'{system}/f', f'{system}/g', f'{system}/h', f'{system}/i',
-        f'{system}/j', f'{system}/k', f'{system}/l', f'{system}/m',
-        f'{system}/n', f'{system}/o', f'{system}/p', f'{system}/q',
-        f'{system}/r', f'{system}/s', f'{system}/t', f'{system}/u',
-        f'{system}/v', f'{system}/w', f'{system}/x', f'{system}/y',
-        f'{system}/z'
+        f'?p=list&action=filters&system={system}&section=number',
+        f'?p=list&action=filters&system={system}&section=A', f'?p=list&action=filters&system={system}&section=B',
+        f'?p=list&action=filters&system={system}&section=C', f'?p=list&action=filters&system={system}&section=D',
+        f'?p=list&action=filters&system={system}&section=E', f'?p=list&action=filters&system={system}&section=F',
+        f'?p=list&action=filters&system={system}&section=G', f'?p=list&action=filters&system={system}&section=H',
+        f'?p=list&action=filters&system={system}&section=I', f'?p=list&action=filters&system={system}&section=J',
+        f'?p=list&action=filters&system={system}&section=K', f'?p=list&action=filters&system={system}&section=L',
+        f'?p=list&action=filters&system={system}&section=M', f'?p=list&action=filters&system={system}&section=N',
+        f'?p=list&action=filters&system={system}&section=O', f'?p=list&action=filters&system={system}&section=P',
+        f'?p=list&action=filters&system={system}&section=Q', f'?p=list&action=filters&system={system}&section=R',
+        f'?p=list&action=filters&system={system}&section=S', f'?p=list&action=filters&system={system}&section=T',
+        f'?p=list&action=filters&system={system}&section=U', f'?p=list&action=filters&system={system}&section=V',
+        f'?p=list&action=filters&system={system}&section=W', f'?p=list&action=filters&system={system}&section=X',
+        f'?p=list&action=filters&system={system}&section=Y', f'?p=list&action=filters&system={system}&section=Z'
     ]
     for x in section_urls:
         roms: List[models.ROM] = get_section_of_roms(x)
@@ -161,7 +168,7 @@ def get_search_selection(config: models.Config) -> models.Config:
     """Gets search criteria for search mode"""
     search_selection: models.SearchSelection = models.SearchSelection()
     print('\nPlease select what system you want to search, or press Enter to do a general site wide search\n')
-    helpers.print_console_list()
+    vimmslair_helper.print_console_list()
     while True:
         user_input: str = sys.stdin.readline()
         try:
@@ -169,9 +176,8 @@ def get_search_selection(config: models.Config) -> models.Config:
                 search_selection.system = 'general'
                 config.query.search_selections = search_selection
                 break
-            if not (int(user_input) > 17 or int(user_input) < 0):
-                search_selection.system = \
-                    helpers.get_selection_from_num(int(user_input))
+            if not (int(user_input) > (len(CONSOLES)-1) or int(user_input) < 0):
+                search_selection.system = vimmslair_helper.get_selection_from_num(int(user_input))
                 config.query.search_selections = search_selection
                 break
             else:
@@ -180,8 +186,8 @@ def get_search_selection(config: models.Config) -> models.Config:
         except ValueError:
             print('Please select a value from the list')
             continue
-    print('\nInput what rom you want to search for:')
-    search_selection.query = sys.stdin.readline()
+    print('Input what rom you want to search for: ', end='')
+    search_selection.query = sys.stdin.readline().strip()
     return config
 
 
@@ -197,17 +203,42 @@ def get_search_section(search_selection: models.SearchSelection) -> List[models.
         rows = table.find_all('tr')
         # For each row, find the first td and then find any <a> elements inside it
         for row in rows:
-            # Get the first td in this row
-            first_td = row.find('td')
+            if row.find('th'):
+                continue
+            row_tds = row.find_all('td')
+            rom_name_td = row_tds[0] if len(row_tds) > 0 else None
+            region_td = row_tds[1] if len(row_tds) > 1 else None
+            version_td = row_tds[2] if len(row_tds) > 2 else None
+
             # If there is a first td (some rows might be header rows with th instead)
-            if first_td:
+            if rom_name_td:
                 # Find all <a> elements in this td
-                rom_a = first_td.find('a')
+                rom_a = rom_name_td.find('a')
                 name = rom_a.text
+                # If there is an image with class "redBorder", add the image title to the name
+                red_border_img = rom_name_td.find('b', class_='redBorder')
+                if red_border_img:
+                    name += ' ' + red_border_img['title']
+
                 page_url = vimmslair_helper.VIMMS_LAIR_BASE_URL + rom_a.get('href')
                 download_url = get_rom_download_url(page_url)
-                rom = models.ROM(name, page_url, download_url)
+
+                # Get the region and version text if they exist
+                region_imgs = region_td.find_all('img') if region_td else None
+                if region_imgs:
+                    region = ''
+                    for img in region_imgs:
+                        region += img['title'] if 'title' in img.attrs else ''
+                        if img != region_imgs[-1]:
+                            region += '\\'
+                else:
+                    region = region_td.text if region_td else '-'
+                version = version_td.text if version_td else ''
+
+                rom = models.ROM(name, page_url, download_url, search_selection.system, region, version)
                 roms.append(rom)
+
+
     except BaseException as e:
         print(f'Failed on system search section: {str(e)}')
     return roms
@@ -289,12 +320,12 @@ def get_extraction_status(config: models.Config) -> models.Config:
 
 def print_general_search(roms: List[models.ROM]):
     table = PrettyTable()
-    table.field_names = ["Selection Number", "System", "ROM"]
+    table.field_names = ["Selection Number", "System", "ROM", "Region", "Version"]
     count = 0
     print(
         "\nSelect which roms you would like to download and then enter 'd'\n")
     for x in roms:
-        table.add_row([count, x.console, x.name])
+        table.add_row([count, x.system, x.name, x.region, x.version])
         count += 1
     table.align = "l"
     table.right_padding_width = 0
@@ -304,11 +335,11 @@ def print_general_search(roms: List[models.ROM]):
 def print_system_search(roms: List[models.ROM]):
     """Prints the results from a system search"""
     table = PrettyTable()
-    table.field_names = ["Selection Number", "ROM"]
+    table.field_names = ["Selection Number", "System", "ROM", "Region", "Version"]
     count: int = 0
 
     for x in roms:
-        table.add_row([count, x.name])
+        table.add_row([count, x.system, x.name, x.region, x.version])
         count += 1
     table.align = "l"
     table.right_padding_width = 0
@@ -318,7 +349,7 @@ def print_system_search(roms: List[models.ROM]):
 
 def print_search_results(roms: List[models.ROM]) -> None:
     """Prints the returned search results from the users query"""
-    if roms[0].console != '':
+    if roms[0].system != '':
         print_general_search(roms)
     else:
         print_system_search(roms)
