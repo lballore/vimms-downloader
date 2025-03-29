@@ -10,12 +10,16 @@ class ROM:
         name: str,
         page_url: str,
         download_url: str,
-        console: str = ''
+        system: str = '',
+        region: str = '',
+        version: str = '',
     ):
         self.name = name
         self.page_url = page_url
         self.download_url = download_url
-        self.console = console
+        self.system = system
+        self.region = region
+        self.version = version
 
 
 class SectionofROMs:
